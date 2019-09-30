@@ -50,7 +50,7 @@ result_folder
 
 class Spore:
     """Parsing of MicroManager metadata"""
-    def __init__(self, show_output = False):
+    def __init__(self, show_output = False, min_area = 250, max_area = 1000, show_title = True, show_legend = True):
         """Standard __init__ method.
 
         Parameters
@@ -60,6 +60,10 @@ class Spore:
         """
                 
         self.show_output = show_output
+        self.show_title = show_title
+        self.show_legend = show_legend
+        self.min_area = min_area
+        self.max_area = max_area
         
     #create anad get the experiment specific folder stored in the result_folder
     def path_to_analysis(self, data_path, result_folder):
@@ -82,7 +86,7 @@ class Spore:
         result_folder_exp = self.path_to_analysis(image_path, result_folder)
 
         regions.to_pickle(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.pkl')
-        regions[['area','ecc']].to_csv(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.csv')
+        regions[['area','ecc']].to_csv(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.csv',index = False)
         fig.savefig(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'_seg.png')
         plt.close(fig)
         #return regions, image, image_seg
@@ -152,12 +156,12 @@ class Spore:
     def normal_fit(self, x, a, x0, s): 
         return (a/(s*(2*np.pi)**0.5))*np.exp(-0.5*((x-x0)/s)**2)
 
-    def split_categories(self, result_folder_exp, min_area = 250, max_area = 1000):
-
+    def split_categories(self, result_folder_exp):
+        
         ecc_table_or = self.load_experiment(result_folder_exp)
         ecc_table = ecc_table_or.copy()
-        ecc_table = ecc_table_or[ecc_table_or.area > min_area]
-        ecc_table = ecc_table[ecc_table.area < max_area]
+        ecc_table = ecc_table_or[ecc_table_or.area > self.min_area]
+        ecc_table = ecc_table[ecc_table.area < self.max_area]
 
         X = np.reshape(ecc_table.ecc.values,(-1,1))
 
@@ -170,6 +174,9 @@ class Spore:
             ind1,ind2 = 1, 0
 
         frac_round = len(X[GM.predict(X)==ind2])/len(X)
+        
+        #find threshold
+        threshold = np.arange(0,1,0.001)[np.argwhere(np.abs(np.diff(GM.predict(np.reshape(np.arange(0,1,0.001),(-1,1)))))>0)[0]][0]
 
         category = (GM.predict(np.reshape(ecc_table_or.ecc.values,(-1,1)))==ind2).astype(int)
         ecc_table_or['roundcat'] = category
@@ -177,44 +184,57 @@ class Spore:
         for indk, k in enumerate(list(grouped.groups.keys())):
             cur_group = grouped.get_group(k)
             cur_group.to_pickle(result_folder_exp+'/'+os.path.basename(cur_group.iloc[0].filename).split('.')[0]+'.pkl')
-            cur_group[['area','ecc','roundcat']].to_csv(result_folder_exp+'/'+os.path.basename(cur_group.iloc[0].filename).split('.')[0]+'.csv', mode = 'w')
-
+            cur_group[['area','ecc','roundcat']].to_csv(result_folder_exp+'/'+os.path.basename(cur_group.iloc[0].filename).split('.')[0]+'.csv', mode = 'w', index = False)
+        
+        ecc_table_or = ecc_table_or[ecc_table_or.area > self.min_area]
+        ecc_table_or = ecc_table_or[ecc_table_or.area < self.max_area]
+            
+        ecc_table_or[['area','ecc','roundcat']].to_csv(result_folder_exp+'/'+os.path.basename(os.path.normpath(result_folder_exp))+'_table_summary.csv',index = False)
+          
 
         hist_val, xdata = np.histogram(X,bins = np.arange(0,1,0.005),density=True)
         xdata = np.array([0.5*(xdata[x]+xdata[x+1]) for x in range(len(xdata)-1)])
 
         fig, ax = plt.subplots()
         plt.bar(x=xdata, height=hist_val, width=xdata[1]-xdata[0],color = 'gray',label='Data')
-        plt.plot(xdata, self.normal_fit(xdata,GM.weights_[0], GM.means_[0,0], GM.covariances_[0,0]**0.5)+
-                 self.normal_fit(xdata,GM.weights_[1], GM.means_[1,0], GM.covariances_[1,0]**0.5),'k',label='Double gauss')
+        #plt.plot(xdata, self.normal_fit(xdata,GM.weights_[0], GM.means_[0,0], GM.covariances_[0,0]**0.5)+
+        #         self.normal_fit(xdata,GM.weights_[1], GM.means_[1,0], GM.covariances_[1,0]**0.5),'k',label='Double gauss')
 
-        plt.plot(xdata,self.normal_fit(xdata,GM.weights_[ind1], GM.means_[ind1,0], GM.covariances_[ind1,0,0]**0.5),'b',label='Elongated spores')
-        plt.plot(xdata,self.normal_fit(xdata,GM.weights_[ind2], GM.means_[ind2,0], GM.covariances_[ind2,0,0]**0.5),'r',label='Round spores')
+        plt.plot(xdata,self.normal_fit(xdata,GM.weights_[ind1], GM.means_[ind1,0], GM.covariances_[ind1,0,0]**0.5),
+                 'b',linewidth = 2, label='Elongated spores')
+        plt.plot(xdata,self.normal_fit(xdata,GM.weights_[ind2], GM.means_[ind2,0], GM.covariances_[ind2,0,0]**0.5),
+                 'r',linewidth = 2, label='Round spores')
+        plt.plot([threshold,threshold],[0,np.max(hist_val)],'k--',linewidth = 2,label='Threshold')
 
         ax.set_xlabel('Eccentricity',fontdict=font)
-        ax.legend()
-        ax.set_title(os.path.basename(os.path.normpath(result_folder_exp))+', Round frac: '+str(np.around(frac_round,decimals=2)))
+        if self.show_legend:
+            ax.legend()
+        if self.show_title:
+            ax.set_title(os.path.basename(os.path.normpath(result_folder_exp))+', Round frac: '+str(np.around(frac_round,decimals=2)))
         if self.show_output:
             plt.show()
         fig.savefig(result_folder_exp+'/'+os.path.basename(os.path.normpath(result_folder_exp))+'_summary.png')
         plt.close(fig)
+        pd.DataFrame({'name': [os.path.basename(os.path.normpath(result_folder_exp))],'fraction':[np.around(frac_round,decimals=2)]}).to_csv(result_folder_exp+'/'+os.path.basename(os.path.normpath(result_folder_exp))+'_summary.csv',index = False, header=False)
 
 
-    def plot_image_categories(self, exp_folder, result_folder, min_area = 250, max_area = 1000):
+    def plot_image_categories(self, exp_folder, result_folder):
 
         result_folder_exp = self.path_to_analysis(exp_folder, result_folder)
 
         np.random.seed(1)
         cmap = matplotlib.colors.ListedColormap (np.random.rand(256,3))
 
-        im_files = glob.glob(os.path.normpath(exp_folder)+'/*.jpg')
+        #im_files = glob.glob(os.path.normpath(exp_folder)+'/*.jpg')
         ecc_table = self.load_experiment(result_folder_exp)
+        im_files = ecc_table.filename.unique()
+      
         for f in im_files:
             image = skimage.io.imread(f)[:,:,0]
             cur_spores = ecc_table[ecc_table.filename == f]
             empty_im = np.zeros(image.shape)
             for x in cur_spores.index:
-                if (cur_spores.loc[x].area>min_area) and (cur_spores.loc[x].area<max_area):
+                if (cur_spores.loc[x].area>self.min_area) and (cur_spores.loc[x].area<self.max_area):
                     if (cur_spores.loc[x].roundcat==1):
                         empty_im[cur_spores.loc[x].coords[:,0],cur_spores.loc[x].coords[:,1]]=1
                     else:
