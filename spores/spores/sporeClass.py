@@ -68,7 +68,7 @@ class Spore:
 
         regions.to_pickle(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.pkl')
         regions[['area','ecc']].to_csv(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.csv',index = False)
-        fig.savefig(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'_seg.png', dpi = 300)
+        fig.savefig(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'_seg.png', dpi = image_seg.shape[0])
         plt.close(fig)
         #return regions, image, image_seg
 
@@ -111,15 +111,23 @@ class Spore:
     def plot_segmentation(self, image, image_seg, saving = True):
         image_seg = image_seg.astype(float)
         image_seg[image_seg == 0] = np.nan
-        fig,ax = plt.subplots(figsize=(10,10))
+        
+        sizes = image_seg.shape
+        height = float(sizes[0])
+        width = float(sizes[1])
+        
+        fig = plt.figure()
+        fig.set_size_inches(width/height, 1, forward=False)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+    
         plt.imshow(image,cmap = 'gray')
         plt.imshow(image_seg,cmap = 'Reds',alpha = 0.7,vmin=0,vmax = 1.5)
-        ax.set_axis_off()
-        plt.tight_layout()
         if self.show_output:
             plt.show()
         return fig
-
+    
 
     #segment all images stored in folder. Save result in result_folder
     def analyse_spore_folder(self, exp_folder, result_folder):
@@ -265,13 +273,20 @@ class Spore:
 
             empty_im = empty_im.astype(float)
             empty_im[empty_im==0]=np.nan
+            
+            sizes = image.shape
+            height = float(sizes[0])
+            width = float(sizes[1])
 
-            fig, ax = plt.subplots(figsize=(10,10))
+            fig = plt.figure()
+            fig.set_size_inches(width/height, 1, forward=False)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+
             plt.imshow(image,cmap = 'gray')
             plt.imshow(empty_im,cmap = cmap,alpha = 0.9,vmin=0,vmax = 14)
-            ax.set_axis_off()
-            plt.tight_layout()
             if self.show_output:
                 plt.show()
-            fig.savefig(result_folder_exp+'/'+os.path.basename(f).split('.')[0]+'_classes.png', dpi = 300)
+            fig.savefig(result_folder_exp+'/'+os.path.basename(f).split('.')[0]+'_classes.png', dpi = height)
             plt.close(fig)
