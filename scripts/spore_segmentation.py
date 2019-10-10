@@ -1,5 +1,5 @@
 import argparse
-from sporeClass import Spore
+from spores.sporeClass import Spore
 
 parser=argparse.ArgumentParser()
 parser.add_argument('exp_folder', type = str, help='Experiment folder')
