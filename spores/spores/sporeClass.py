@@ -75,7 +75,10 @@ class Spore:
     #segment spores in a given image and measure their properties
     def find_spores(self, image_path):
 
+        #get a binary segmentation
         raw_im, image = self.segmentation(image_path)
+        
+        #measure region properties and keep area, eccentricity and coords
         regions = skimage.measure.regionprops(skimage.morphology.label(image),coordinates='rc')
 
         regions_prop = pd.DataFrame({'area':[x.area for x in regions],'ecc':[x.eccentricity for x in regions],
@@ -86,13 +89,17 @@ class Spore:
 
     #create binary mask of spores
     def segmentation(self, image_path):
+        #import image
         raw_image = skimage.io.imread(image_path)
+        #do a median filtering to remove outliers
         raw_image = skimage.filters.median(raw_image[:,:,0],selem=skimage.morphology.disk(10))
+        #do a large scale background subtraction by using a very large gaussian
         flatten = raw_image-skimage.filters.gaussian(raw_image,sigma=100,preserve_range=True)
-        #plt.imshow(flatten)
-        #plt.show()
         
+        #calculate a binary mask using automatic Li thresholding
         #mask = flatten<skimage.filters.threshold_li(flatten)
+        
+        #calcualte a binary mask by using the background distribution (asssumes low density of spores)
         mask = flatten < np.mean(flatten)-2*np.std(flatten)
         
         #remove objects touching the border
@@ -146,49 +153,64 @@ class Spore:
 
     def split_categories(self, result_folder_exp):
 
+        #recover all the spore properties for all images
         ecc_table_or = self.load_experiment(result_folder_exp)
         ecc_table = ecc_table_or.copy()
+        
+        #remove too small and too large regions
         ecc_table = ecc_table_or[ecc_table_or.area > self.min_area]
         ecc_table = ecc_table[ecc_table.area < self.max_area]
 
+        #reshape eccentricity array for sklearn
         X = np.reshape(ecc_table.ecc.values,(-1,1))
         
+        #if no threshold is provided, classify using EM
         if self.threshold is None:
 
+            #create EM object. Initialization is important to ensure the two classes don't overlap
             GM = mixture.GaussianMixture(n_components=2,means_init = np.reshape([0.5,0.9],(-1,1)))
+            
+            #classifiy the data
             GM.fit(X)
 
+            #check wich class correspond to round cells. ind2 is always the round class
             if GM.means_[0]>GM.means_[1]:
                 ind1,ind2 = 0, 1
             else:
                 ind1,ind2 = 1, 0
 
+            #calculate the fraction of round cells
             frac_round = len(X[GM.predict(X)==ind2])/len(X)
 
-            #find threshold
+            #find threshold by finding the first category change in a fine-grained eccentricity range
             threshold = np.arange(0,1,0.001)[np.argwhere(np.abs(np.diff(GM.predict(np.reshape(np.arange(0,1,0.001),(-1,1)))))>0)[0]][0]
 
+            #create a list of categories and add to dataframe
             category = (GM.predict(np.reshape(ecc_table_or.ecc.values,(-1,1)))==ind2).astype(int)
             ecc_table_or['roundcat'] = category
         else:
+            #if a fixed thresdhold is provieded, just calculate the fraction of cells below threshold
             threshold = self.threshold
             ecc_table['roundcat'] = ecc_table.ecc.apply(lambda x: 1 if x<threshold else 0)
             ecc_table_or['roundcat'] = ecc_table_or.ecc.apply(lambda x: 1 if x<threshold else 0)
             frac_round = np.sum(ecc_table['roundcat'])/len(ecc_table)
         
-        
+        #group dataframe by filename to re-export a summary file per image as csv
         grouped = ecc_table_or.groupby('filename',as_index=False)
         for indk, k in enumerate(list(grouped.groups.keys())):
             cur_group = grouped.get_group(k)
             cur_group.to_pickle(result_folder_exp+'/'+os.path.basename(cur_group.iloc[0].filename).split('.')[0]+'.pkl')
             cur_group[['area','ecc','roundcat']].to_csv(result_folder_exp+'/'+os.path.basename(cur_group.iloc[0].filename).split('.')[0]+'.csv', mode = 'w', index = False)
 
+        #remove too small and too large spores from original dataframe and export as csv
         ecc_table_or = ecc_table_or[ecc_table_or.area >= self.min_area]
         ecc_table_or = ecc_table_or[ecc_table_or.area <= self.max_area]
+        ecc_table_or[['area','ecc','roundcat']].to_csv(result_folder_exp+'/'+
+                                                       os.path.basename(os.path.normpath(result_folder_exp))+'_summary.csv',
+                                                       index = False)
 
-        ecc_table_or[['area','ecc','roundcat']].to_csv(result_folder_exp+'/'+os.path.basename(os.path.normpath(result_folder_exp))+'_summary.csv',index = False)
 
-
+        #create a histogram figure
         hist_val, xdata = np.histogram(X,bins = np.arange(0,1,0.005),density=True)
         xdata = np.array([0.5*(xdata[x]+xdata[x+1]) for x in range(len(xdata)-1)])
 
@@ -197,6 +219,7 @@ class Spore:
         #plt.plot(xdata, self.normal_fit(xdata,GM.weights_[0], GM.means_[0,0], GM.covariances_[0,0]**0.5)+
         #         self.normal_fit(xdata,GM.weights_[1], GM.means_[1,0], GM.covariances_[1,0]**0.5),'k',label='Double gauss')
 
+        #if EM is performed, show gaussian fits
         if self.threshold is None:
             plt.plot(xdata,self.normal_fit(xdata,GM.weights_[ind1], GM.means_[ind1,0], GM.covariances_[ind1,0,0]**0.5),
                  'b',linewidth = 2, label='Elongated spores')
