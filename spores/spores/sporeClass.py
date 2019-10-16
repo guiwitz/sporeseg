@@ -80,7 +80,11 @@ class Spore:
         
         #measure region properties and keep area, eccentricity and coords
         regions = skimage.measure.regionprops(skimage.morphology.label(image),coordinates='rc')
+        
+        #keep only convex objects
+        regions = [x for x in regions if x.solidity>0.95]
 
+        #collect relevant information
         regions_prop = pd.DataFrame({'area':[x.area for x in regions],'ecc':[x.eccentricity for x in regions],
                                     'coords': [x.coords for x in regions]})
         regions_prop['filename'] = image_path
