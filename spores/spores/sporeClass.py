@@ -19,7 +19,7 @@ font = {'family': 'sans-serif',
 
 class Spore:
     
-    def __init__(self, show_output = False, min_area = 250, max_area = 1000, 
+    def __init__(self, show_output = False, min_area = 250, max_area = 1500, 
                  show_title = True, show_legend = True, threshold = None, convexity = 0.9):
 
         """Standard __init__ method.
@@ -100,7 +100,7 @@ class Spore:
         result_folder_exp = self.path_to_analysis(image_path, result_folder)
 
         regions.to_pickle(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.pkl')
-        regions[['area','ecc']].to_csv(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.csv',index = False)
+        regions[['area','convex_area','ecc']].to_csv(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.csv',index = False)
         fig.savefig(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'_seg.png', dpi = image_seg.shape[0])
         plt.close(fig)
         #return regions, image, image_seg
@@ -129,21 +129,16 @@ class Spore:
         
         #measure region properties and keep area, eccentricity and coords
         regions = skimage.measure.regionprops(skimage.morphology.label(image_mask),coordinates='rc')
-        
-        #keep only convex objects
-        indices = np.array([0]+[x.label if x.area/x.convex_area>self.convexity else 0 for x in regions])
-        image_mask = indices[skimage.morphology.label(image_mask)]>0
-        
-        regions = skimage.measure.regionprops(skimage.morphology.label(image_mask),coordinates='rc')
 
         #collect relevant information
-        regions_prop = pd.DataFrame({'area':[x.area for x in regions],'ecc':[x.eccentricity for x in regions],
+        regions_prop = pd.DataFrame({'area':[x.area for x in regions],'convex_area':[x.convex_area for x in regions],
+                                     'ecc':[x.eccentricity for x in regions],
                                     'coords': [x.coords for x in regions]})
         regions_prop['filename'] = image_path
 
         return regions_prop, raw_im, image_mask
 
-    def segmentation(self, image_path):
+    def segmentation_old(self, image_path):
         """Creation of binary mask of spores.
     
         Parameters
@@ -273,6 +268,52 @@ class Spore:
         #plt.show()
 
         return image, snake_mask
+    
+    def segmentation(self, image_path):
+        """Alternative solution for creation of binary mask of spores.
+    
+        Parameters
+        ----------
+        image_path : str
+            path to image
+
+        Returns
+        -------
+        raw_im: numpy array
+            median filtered image
+        newmask: numpy array
+            binary mask of spores
+        """
+        image = skimage.io.imread(image_path)[:,:,0]
+        raw_image = skimage.filters.median(image[::2,::2],selem=skimage.morphology.disk(5))
+        raw_image = skimage.transform.resize(raw_image, image.shape, order = 1, preserve_range=True).astype(np.uint8)
+
+        border_mask = skimage.morphology.dilation(
+                    skimage.morphology.thin(
+                        skimage.filters.rank.gradient(
+                            raw_image,skimage.
+                            morphology.disk(2))>10),
+                    skimage.morphology.disk(1))
+
+        filled = binary_fill_holes(border_mask)^border_mask
+
+        filled = skimage.segmentation.clear_border(filled,buffer_size = 10)
+
+        filled_lab = skimage.morphology.label(filled)
+
+        reg_spores = skimage.measure.regionprops(filled_lab)
+
+        newmask = np.zeros(filled.shape)
+        for i in range(len(reg_spores)):
+            if reg_spores[i].area >self.min_area:
+                bbox = reg_spores[i].bbox
+                #small_im = skimage.filters.median(image[bbox[0]-10:bbox[2]+11,bbox[1]-10:bbox[3]+11], skimage.morphology.disk(3))
+                small_im = image[bbox[0]-10:bbox[2]+11,bbox[1]-10:bbox[3]+11]
+                threshold = skimage.filters.threshold_li(small_im)
+                newmask[bbox[0]-10:bbox[2]+11,bbox[1]-10:bbox[3]+11] = binary_fill_holes(small_im<threshold)
+                
+        return image, newmask
+
 
 
     def plot_segmentation(self, image, image_seg):
@@ -393,10 +434,16 @@ class Spore:
         #recover all the spore properties for all images
         ecc_table_or = self.load_experiment(result_folder_exp)
         ecc_table = ecc_table_or.copy()
-        
+                
         #remove too small and too large regions
         ecc_table = ecc_table_or[ecc_table_or.area > self.min_area]
         ecc_table = ecc_table[ecc_table.area < self.max_area]
+        
+        #keep only convex objects
+        ecc_table =  ecc_table[ecc_table.area/ecc_table.convex_area > self.convexity]
+        #indices = np.array([0]+[x.label if x.area/x.convex_area>self.convexity else 0 for x in regions])
+        #image_mask = indices[skimage.morphology.label(image_mask)]>0
+        #regions = skimage.measure.regionprops(skimage.morphology.label(image_mask),coordinates='rc')
 
         #reshape eccentricity array for sklearn
         X = np.reshape(ecc_table.ecc.values,(-1,1))
@@ -405,7 +452,7 @@ class Spore:
         if self.threshold is None:
 
             #create EM object. Initialization is important to ensure the two classes don't overlap
-            GM = mixture.GaussianMixture(n_components=2,means_init = np.reshape([0.5,0.9],(-1,1)))
+            GM = mixture.GaussianMixture(n_components=2,means_init = np.reshape([0.3,0.9],(-1,1)))
             
             #classifiy the data
             GM.fit(X)
@@ -437,11 +484,12 @@ class Spore:
         for indk, k in enumerate(list(grouped.groups.keys())):
             cur_group = grouped.get_group(k)
             cur_group.to_pickle(result_folder_exp+'/'+os.path.basename(cur_group.iloc[0].filename).split('.')[0]+'.pkl')
-            cur_group[['area','ecc','roundcat']].to_csv(result_folder_exp+'/'+os.path.basename(cur_group.iloc[0].filename).split('.')[0]+'.csv', mode = 'w', index = False)
+            cur_group[['area','convex_area','ecc','roundcat']].to_csv(result_folder_exp+'/'+os.path.basename(cur_group.iloc[0].filename).split('.')[0]+'.csv', mode = 'w', index = False)
 
-        #remove too small and too large spores from original dataframe and export as csv
+        #remove too small, too large spores and non-convex spores from original dataframe and export as csv
         ecc_table_or = ecc_table_or[ecc_table_or.area >= self.min_area]
         ecc_table_or = ecc_table_or[ecc_table_or.area <= self.max_area]
+        ecc_table_or =  ecc_table_or[ecc_table_or.area/ecc_table_or.convex_area > self.convexity]
         ecc_table_or[['area','ecc','roundcat']].to_csv(result_folder_exp+'/'+
                                                        os.path.basename(os.path.normpath(result_folder_exp))+'_summary.csv',
                                                        index = False)
@@ -509,7 +557,8 @@ class Spore:
             cur_spores = ecc_table[ecc_table.filename == f]
             empty_im = np.zeros(image.shape)
             for x in cur_spores.index:
-                if (cur_spores.loc[x].area>self.min_area) and (cur_spores.loc[x].area<self.max_area):
+                if (cur_spores.loc[x].area>self.min_area) and (cur_spores.loc[x].area<self.max_area) \
+                and (cur_spores.loc[x].area/cur_spores.loc[x].convex_area > self.convexity):
                     if (cur_spores.loc[x].roundcat==1):
                         empty_im[cur_spores.loc[x].coords[:,0],cur_spores.loc[x].coords[:,1]]=1
                     else:
