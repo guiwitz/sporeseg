@@ -6,6 +6,7 @@ import skimage
 import skimage.morphology
 import skimage.segmentation
 from sklearn import mixture
+from scipy.ndimage.morphology import binary_fill_holes
 #from scipy.optimize import curve_fit
 import matplotlib
 cmap = matplotlib.colors.ListedColormap (np.random.rand(256,3))
@@ -19,7 +20,7 @@ font = {'family': 'sans-serif',
 class Spore:
     
     def __init__(self, show_output = False, min_area = 250, max_area = 1000, 
-                 show_title = True, show_legend = True, threshold = None):
+                 show_title = True, show_legend = True, threshold = None, convexity = 0.9):
 
         """Standard __init__ method.
 
@@ -35,8 +36,10 @@ class Spore:
             minimal area of spores considered in analysis
         max_area : int
             maximal area of spores considered in analysis
-        threshold = float
+        threshold : float
             fixed threshold to use for splitting
+        convexity : float (0-1)
+            threshold for convexity. Convex object have a value of 1
         """
 
         self.show_output = show_output
@@ -45,9 +48,24 @@ class Spore:
         self.min_area = min_area
         self.max_area = max_area
         self.threshold = threshold
+        self.convexity = convexity
+        
 
-    #create anad get the experiment specific folder stored in the result_folder
     def path_to_analysis(self, data_path, result_folder):
+        """Returns the path to the result folder of an analysis
+    
+        Parameters
+        ----------
+        data_path : str
+            path to data
+        result_folder : str
+            main folder of results
+
+        Returns
+        -------
+        result_folder_exp: str 
+            folder of results for a given dataset
+        """
 
         if os.path.isfile(data_path):
             result_folder_exp = result_folder+'/'+os.path.basename(os.path.dirname(data_path))
@@ -59,8 +77,23 @@ class Spore:
 
         return result_folder_exp
 
-    #segment single image stored in file. Save result in result_folder
+
     def analyse_single_image(self, image_path, result_folder):
+        """Segment a single image. Saves segmentation images and
+        segmentation results as pkl and csv
+    
+        Parameters
+        ----------
+        image_path : str
+            path to image
+        result_folder : str
+            main folder of results
+
+        Returns
+        -------
+        
+        """
+        
         regions, image, image_seg = self.find_spores(image_path)
         fig = self.plot_segmentation(image, image_seg)
 
@@ -72,31 +105,64 @@ class Spore:
         plt.close(fig)
         #return regions, image, image_seg
 
-    #segment spores in a given image and measure their properties
+        
     def find_spores(self, image_path):
+        """Segmentation of an image.
+    
+        Parameters
+        ----------
+        image_path : str
+            path to image
+
+        Returns
+        -------
+        regions_prop: Dataframe 
+            Pandas dataframe with information on segmented spores
+        raw_im: numpy array
+            median filtered image
+        image_mask: numpy array
+            binary mask of spores
+        """
 
         #get a binary segmentation
-        raw_im, image = self.segmentation(image_path)
+        raw_im, image_mask = self.segmentation(image_path)
         
         #measure region properties and keep area, eccentricity and coords
-        regions = skimage.measure.regionprops(skimage.morphology.label(image),coordinates='rc')
+        regions = skimage.measure.regionprops(skimage.morphology.label(image_mask),coordinates='rc')
         
         #keep only convex objects
-        regions = [x for x in regions if x.solidity>0.95]
+        indices = np.array([0]+[x.label if x.area/x.convex_area>self.convexity else 0 for x in regions])
+        image_mask = indices[skimage.morphology.label(image_mask)]>0
+        
+        regions = skimage.measure.regionprops(skimage.morphology.label(image_mask),coordinates='rc')
 
         #collect relevant information
         regions_prop = pd.DataFrame({'area':[x.area for x in regions],'ecc':[x.eccentricity for x in regions],
                                     'coords': [x.coords for x in regions]})
         regions_prop['filename'] = image_path
 
-        return regions_prop, raw_im, image
+        return regions_prop, raw_im, image_mask
 
-    #create binary mask of spores
     def segmentation(self, image_path):
+        """Creation of binary mask of spores.
+    
+        Parameters
+        ----------
+        image_path : str
+            path to image
+
+        Returns
+        -------
+        raw_im: numpy array
+            median filtered image
+        snake_mask: numpy array
+            binary mask of spores
+        """
+
         #import image
-        raw_image = skimage.io.imread(image_path)
+        image = skimage.io.imread(image_path)[:,:,0]
         #do a median filtering to remove outliers
-        raw_image = skimage.filters.median(raw_image[:,:,0],selem=skimage.morphology.disk(10))
+        raw_image = skimage.filters.median(image,selem=skimage.morphology.disk(10))
         #do a large scale background subtraction by using a very large gaussian
         flatten = raw_image-skimage.filters.gaussian(raw_image,sigma=100,preserve_range=True)
         
@@ -107,12 +173,126 @@ class Spore:
         mask = flatten < np.mean(flatten)-2*np.std(flatten)
         
         #remove objects touching the border
-        mask = skimage.segmentation.clear_border(mask)
+        mask = skimage.segmentation.clear_border(mask,buffer_size = 10)
+        mask_label = skimage.morphology.label(mask)
+        
+        reg_spores = skimage.measure.regionprops(skimage.morphology.label(mask), intensity_image=raw_image)
+        
+        #use an active contour on each element to make segmentation more accurate
+        #create again a mask using those refined contours
+        snake_mask = np.zeros(image.shape)
 
-        return raw_image, mask
+        #plt.figure(figsize=(20,20))
+        #plt.imshow(image,cmap='gray')
+        for i in range(len(reg_spores)):
+            bbox = reg_spores[i].bbox
+            small_im = skimage.filters.median(image[bbox[0]-10:bbox[2]+11,bbox[1]-10:bbox[3]+11], skimage.morphology.disk(3))
+            #small_im = raw_image[bbox[0]-5:bbox[2]+6,bbox[1]-5:bbox[3]+6]
+            small_mask = mask_label[bbox[0]-10:bbox[2]+11,bbox[1]-10:bbox[3]+11] == reg_spores[i].label
+            small_mask = skimage.morphology.binary_dilation(small_mask, skimage.morphology.disk(2))
 
-    #plot segmentation result for an image
-    def plot_segmentation(self, image, image_seg, saving = True):
+            contour = skimage.measure.find_contours(small_mask, level = 0.8)
+            snake = skimage.segmentation.active_contour(small_im.astype(float),snake= np.fliplr(contour[0]), w_edge=0.005, w_line=0,alpha = 0.1, beta=0.1)#,max_iterations=2)
+            #plt.plot(contour[0][:,1]+bbox[1]-10,contour[0][:,0]+bbox[0]-10,'b-')
+            #plt.plot(snake[:,0]+bbox[1]-10,snake[:,1]+bbox[0]-10,'r-')
+
+            rr, cc = skimage.draw.polygon(snake[:,1]+bbox[0]-10,
+                                              snake[:,0]+bbox[1]-10, snake_mask.shape)
+            snake_mask[rr,cc] = True
+        #plt.show()
+
+        return raw_image, snake_mask
+    
+    def segmentation_new(self, image_path):
+        """Alternative solution for creation of binary mask of spores.
+    
+        Parameters
+        ----------
+        image_path : str
+            path to image
+
+        Returns
+        -------
+        raw_im: numpy array
+            median filtered image
+        snake_mask: numpy array
+            binary mask of spores
+        """
+        
+        #import image
+        image = skimage.io.imread(image_path)[:,:,0]
+        #do a median filtering to remove outliers. Done one rescaled image for speed
+        raw_image = skimage.filters.median(image[::2,::2],selem=skimage.morphology.disk(5))
+        raw_image = skimage.transform.resize(raw_image, image.shape, order = 1, preserve_range=True).astype(np.uint8)
+
+        border_mask = skimage.morphology.dilation(
+            skimage.morphology.thin(
+                skimage.filters.rank.gradient(
+                    raw_image,skimage.
+                    morphology.disk(2))>10),
+            skimage.morphology.disk(1))
+
+        inv_border_label = skimage.morphology.label(~border_mask)
+
+        regions = skimage.measure.regionprops(inv_border_label)
+        indices = np.array([0]+[x.label if (x.area>self.min_area)&(x.area<self.max_area) else 0 for x in regions])
+        mask = indices[skimage.morphology.label(inv_border_label)]>0
+        mask = skimage.segmentation.clear_border(mask,buffer_size = 10)
+        mask_label = skimage.morphology.label(mask)
+
+        #analyze the binary image
+        reg_spores = skimage.measure.regionprops(skimage.morphology.label(mask), intensity_image=raw_image)
+
+        #find the peak of average intensity within objects and create a threshold
+        int_values = np.array([x.mean_intensity for x in reg_spores])
+        hist_val, hist_x = np.histogram(int_values,np.arange(0,255,10))
+        threshold = hist_x[np.argmax(hist_val)] + 40
+
+        #use an active contour on each element to make segmentation more accurate
+        #create again a mask using those refined contours
+        snake_mask = np.zeros(image.shape)
+
+        #plt.figure(figsize=(20,20))
+        #plt.imshow(image,cmap='gray')
+        for i in range(len(reg_spores)):
+            bbox = reg_spores[i].bbox
+            small_im = skimage.filters.median(image[bbox[0]-10:bbox[2]+11,bbox[1]-10:bbox[3]+11], skimage.morphology.disk(3))
+            #small_im = raw_image[bbox[0]-5:bbox[2]+6,bbox[1]-5:bbox[3]+6]
+            small_mask = mask_label[bbox[0]-10:bbox[2]+11,bbox[1]-10:bbox[3]+11] == reg_spores[i].label
+            small_mask = skimage.morphology.binary_dilation(small_mask, skimage.morphology.disk(2))
+
+            if reg_spores[i].mean_intensity<threshold:
+                contour = skimage.measure.find_contours(small_mask, level = 0.8)
+                snake = skimage.segmentation.active_contour(small_im.astype(float),snake= np.fliplr(contour[0]), w_edge=0.005, w_line=0,alpha = 0.1, beta=0.1)#,max_iterations=2)
+                #plt.plot(contour[0][:,1]+bbox[1]-10,contour[0][:,0]+bbox[0]-10,'b-')
+                #plt.plot(snake[:,0]+bbox[1]-10,snake[:,1]+bbox[0]-10,'r-')
+
+                rr, cc = skimage.draw.polygon(snake[:,1]+bbox[0]-10,
+                                              snake[:,0]+bbox[1]-10, snake_mask.shape)
+                snake_mask[rr,cc] = True
+        #plt.show()
+
+        return image, snake_mask
+
+
+    def plot_segmentation(self, image, image_seg):
+        """Plot and save the superposition of an image and its binary
+        segmentation mask
+    
+        Parameters
+        ----------
+        image : numpy array
+            intensity image
+        image_seg : numpy array
+            binary mask array
+            
+
+        Returns
+        -------
+        fig: matplotlib figure
+            
+        """
+        
         image_seg = image_seg.astype(float)
         image_seg[image_seg == 0] = np.nan
         
@@ -135,6 +315,21 @@ class Spore:
 
     #segment all images stored in folder. Save result in result_folder
     def analyse_spore_folder(self, exp_folder, result_folder):
+        """Run segmentation on all images of a folder
+    
+        Parameters
+        ----------
+        exp_folder : str
+            path to folder with images
+        result_folder : str
+            folder where to save results
+            
+
+        Returns
+        -------
+        
+        """
+        
         filenames = glob.glob(os.path.normpath(exp_folder)+'/*.jpg')
         for f in filenames:
             self.analyse_single_image(f, result_folder)
@@ -142,6 +337,20 @@ class Spore:
 
     #create table gathering segmentation info of all files found in folder
     def load_experiment(self, result_folder_exp):
+        """Load all segmentation data (pkl files) of a folder.
+    
+        Parameters
+        ----------
+        result_folder_exp : str
+            path to folder with results
+            
+
+        Returns
+        -------
+        ecc: Dataframe
+            dataframe with data of all images
+            
+        """
 
         #newpath = result_folder+'/'+os.path.basename(os.path.normpath(folder))
         filenames = glob.glob(result_folder_exp+'/*.pkl')
@@ -164,6 +373,22 @@ class Spore:
         return (a/(s*(2*np.pi)**0.5))*np.exp(-0.5*((x-x0)/s)**2)
 
     def split_categories(self, result_folder_exp):
+        """Given a segmentation dataset split the results
+        into two categories based on eccentricity. Results are saved 
+        in the form of a csv file. The threshold between categories can
+        be calcualted using a gaussian mixture or it can be manually set
+        if self.threshold has a value.
+    
+        Parameters
+        ----------
+        result_folder_exp : str
+            path to folder with results
+            
+
+        Returns
+        -------
+            
+        """
 
         #recover all the spore properties for all images
         ecc_table_or = self.load_experiment(result_folder_exp)
@@ -254,6 +479,21 @@ class Spore:
 
 
     def plot_image_categories(self, exp_folder, result_folder):
+        """Plot a superposition of images and their segmentation
+        with the two categories colored differently.
+    
+        Parameters
+        ----------
+        exp_folder : str
+            path to folder with images
+        result_folder : str
+            folder where to save results
+            
+
+        Returns
+        -------
+        
+        """
 
         result_folder_exp = self.path_to_analysis(exp_folder, result_folder)
 
