@@ -4,8 +4,8 @@ from spores.sporeClass import Spore
 parser=argparse.ArgumentParser()
 parser.add_argument('exp_folder', type = str, help='Experiment folder')
 parser.add_argument('result_folder', type = str, help='Result storage folder')
-parser.add_argument('--max_area', type = int, default = 1000, help='Max area to consider')
-parser.add_argument('--min_area', type = int, default = 250, help='Min area to consider')
+parser.add_argument('--max_area', type = int, help='Max area to consider')
+parser.add_argument('--min_area', type = int, help='Min area to consider')
 parser.add_argument('--threshold', type = float, help='Classification threshold')
 parser.add_argument('--convexity', type = float, help='Convexity threshold')
 parser.add_argument('--show_output', action='store_true', help='show plots')
@@ -18,10 +18,15 @@ spores = Spore()
 exp_folder = args.exp_folder
 result_folder = args.result_folder
 
-spores.min_area = args.min_area
-spores.max_area = args.max_area
+if args.min_area is not None:
+    spores.min_area = args.min_area
+if args.max_area is not None:
+    spores.max_area = args.max_area
+if args.convexity is not None:
+    spores.convexity = args.convexity
+    
 spores.threshold = args.threshold
-spores.convexity = args.convexity
+
 spores.show_output = args.show_output
 spores.show_title = args.show_title
 spores.show_legend = args.show_legend
