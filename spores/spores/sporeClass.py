@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import skimage
 import skimage.morphology
 import skimage.segmentation
+import skimage.io
 from sklearn import mixture
 from scipy.ndimage.morphology import binary_fill_holes
 #from scipy.optimize import curve_fit
