@@ -20,7 +20,7 @@ font = {'family': 'sans-serif',
 
 class Spore:
     
-    def __init__(self, show_output = False, min_area = 250, max_area = 1500, 
+    def __init__(self, show_output = False, min_area = 250, max_area = 1500, bin_width = 0.01,
                  show_title = True, show_legend = True, threshold = None, convexity = 0.9):
 
         """Standard __init__ method.
@@ -37,6 +37,8 @@ class Spore:
             minimal area of spores considered in analysis
         max_area : int
             maximal area of spores considered in analysis
+        bin_width : float
+            bin width of eccentricity histogram
         threshold : float
             fixed threshold to use for splitting
         convexity : float (0-1)
@@ -48,6 +50,7 @@ class Spore:
         self.show_legend = show_legend
         self.min_area = min_area
         self.max_area = max_area
+        self.bin_width = bin_width
         self.threshold = threshold
         self.convexity = convexity
         
@@ -101,7 +104,7 @@ class Spore:
         result_folder_exp = self.path_to_analysis(image_path, result_folder)
 
         regions.to_pickle(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.pkl')
-        regions[['area','convex_area','ecc']].to_csv(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.csv',index = False, float_format='%.3f')
+        regions[['area','convex_area','ecc']].to_csv(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.csv',index = False, float_format='%.5f')
         fig.savefig(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'_seg.png', dpi = image_seg.shape[0])
         plt.close(fig)
         #return regions, image, image_seg
@@ -497,7 +500,7 @@ class Spore:
 
 
         #create a histogram figure
-        hist_val, xdata = np.histogram(X,bins = np.arange(0,1,0.005),density=True)
+        hist_val, xdata = np.histogram(X,bins = np.arange(0,1,self.bin_width),density=True)
         xdata = np.array([0.5*(xdata[x]+xdata[x+1]) for x in range(len(xdata)-1)])
 
         fig, ax = plt.subplots()
