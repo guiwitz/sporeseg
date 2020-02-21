@@ -456,7 +456,7 @@ class Spore:
         if self.threshold is None:
 
             #create EM object. Initialization is important to ensure the two classes don't overlap
-            GM = mixture.GaussianMixture(n_components=2,means_init = np.reshape([0.3,0.9],(-1,1)))
+            GM = mixture.GaussianMixture(n_components=2,means_init = np.reshape([0.5,0.95],(-1,1)))
             
             #classifiy the data
             GM.fit(X)
@@ -488,15 +488,16 @@ class Spore:
         for indk, k in enumerate(list(grouped.groups.keys())):
             cur_group = grouped.get_group(k)
             cur_group.to_pickle(result_folder_exp+'/'+os.path.basename(cur_group.iloc[0].filename).split('.')[0]+'.pkl')
-            cur_group[['area','convex_area','ecc','roundcat']].to_csv(result_folder_exp+'/'+os.path.basename(cur_group.iloc[0].filename).split('.')[0]+'.csv', mode = 'w', index = False)
+            cur_group[['area','convex_area','ecc','roundcat']].to_csv(result_folder_exp+'/'+os.path.basename(cur_group.iloc[0].filename).split('.')[0]+'.csv', mode = 'w', index = False, float_format='%.5f')
 
         #remove too small, too large spores and non-convex spores from original dataframe and export as csv
         ecc_table_or = ecc_table_or[ecc_table_or.area >= self.min_area]
         ecc_table_or = ecc_table_or[ecc_table_or.area <= self.max_area]
         ecc_table_or =  ecc_table_or[ecc_table_or.area/ecc_table_or.convex_area > self.convexity]
-        ecc_table_or[['area','ecc','roundcat']].to_csv(result_folder_exp+'/'+
+        ecc_table_or.filename = ecc_table_or.filename.apply(lambda x: os.path.basename(x))
+        ecc_table_or[['filename','area','ecc','roundcat']].to_csv(result_folder_exp+'/'+
                                                        os.path.basename(os.path.normpath(result_folder_exp))+'_summary.csv',
-                                                       index = False)
+                                                       index = False, header=['filename','area','eccentricity','round'], float_format='%.5f')
 
 
         #create a histogram figure
@@ -549,8 +550,10 @@ class Spore:
 
         result_folder_exp = self.path_to_analysis(exp_folder, result_folder)
 
-        np.random.seed(1)
-        cmap = matplotlib.colors.ListedColormap (np.random.rand(256,3))
+        colmat = np.zeros((2,3)).astype(float)
+        colmat[0,:] = [1,1,0]
+        colmat[1,:] = [1,0,1]
+        cmap = matplotlib.colors.ListedColormap(colmat)
 
         #im_files = glob.glob(os.path.normpath(exp_folder)+'/*.jpg')
         ecc_table = self.load_experiment(result_folder_exp)
@@ -582,7 +585,7 @@ class Spore:
             fig.add_axes(ax)
 
             plt.imshow(image,cmap = 'gray')
-            plt.imshow(empty_im,cmap = cmap,alpha = 0.9,vmin=0,vmax = 14)
+            plt.imshow(empty_im,cmap = cmap,alpha = 0.9)#,vmin=0,vmax = 14)
             if self.show_output:
                 plt.show()
             fig.savefig(result_folder_exp+'/'+os.path.basename(f).split('.')[0]+'_classes.png', dpi = height)
