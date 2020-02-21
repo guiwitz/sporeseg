@@ -1,4 +1,5 @@
-# MSUD
+# sporeseg
+
 Segmentation of spores
 
 ## Installing the environment:
