@@ -272,7 +272,6 @@ class Spore:
             plt.show()
         return fig
 
-    # segment all images stored in folder. Save result in result_folder
     def analyse_spore_folder(self, exp_folder, result_folder):
         """Run segmentation on all images of a folder
 

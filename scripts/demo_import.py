@@ -5,7 +5,7 @@ if not os.path.isdir('Sporefolder/SporesA'):
     os.makedirs('Sporefolder/SporesA')
 if not os.path.isdir('Sporefolder/SporesB'):
     os.makedirs('Sporefolder/SporesB')
-    
+
 myfile = requests.get('https://www.dropbox.com/s/e1y882oawwxmtn6/spore1.jpg?dl=1', allow_redirects=True)
 open('Sporefolder/SporesA/spore1.jpg', 'wb').write(myfile.content)
 

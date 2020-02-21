@@ -2,8 +2,8 @@ import argparse
 from spores.sporeClass import Spore
 
 parser = argparse.ArgumentParser()
-parser.add_argument('exp_folder', type = str, help='Experiment folder')
-parser.add_argument('result_folder', type = str, help='Result storage folder')
+parser.add_argument('exp_folder', type=str, help='Experiment folder')
+parser.add_argument('result_folder', type=str, help='Result storage folder')
 parser.add_argument('--show_output', action='store_true', help='show plots')
 args = parser.parse_args()
 
