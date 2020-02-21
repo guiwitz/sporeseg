@@ -101,7 +101,7 @@ class Spore:
         result_folder_exp = self.path_to_analysis(image_path, result_folder)
 
         regions.to_pickle(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.pkl')
-        regions[['area','convex_area','ecc']].to_csv(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.csv',index = False)
+        regions[['area','convex_area','ecc']].to_csv(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'.csv',index = False, float_format='%.3f')
         fig.savefig(result_folder_exp+'/'+os.path.basename(image_path).split('.')[0]+'_seg.png', dpi = image_seg.shape[0])
         plt.close(fig)
         #return regions, image, image_seg
