@@ -181,7 +181,7 @@ class Spore:
 
         return regions_prop, raw_im, image_mask
 
-    def segmentation(self, image_path):
+    def segmentation(self, image_path, gradient_threshold = 10):
         """Alternative solution for creation of binary mask of spores.
 
         Parameters
@@ -196,18 +196,24 @@ class Spore:
         newmask: numpy array
             binary mask of spores
         """
+
+        # image loading
         image = skimage.io.imread(image_path)[:, :, 0]
+        
+        # median filtering
         raw_image = skimage.filters.median(
             image[::2, ::2], selem=skimage.morphology.disk(5)
         )
+        # image upscaling
         raw_image = skimage.transform.resize(
             raw_image, image.shape, order=1, preserve_range=True
         ).astype(np.uint8)
 
+        #obtain contours by thresholding the gradient image
         border_mask = skimage.morphology.dilation(
             skimage.morphology.thin(
                 skimage.filters.rank.gradient(raw_image, skimage.morphology.disk(2))
-                > 10
+                > gradient_threshold
             ),
             skimage.morphology.disk(1),
         )
