@@ -11,7 +11,11 @@ from scipy.ndimage.morphology import binary_fill_holes
 
 import matplotlib
 
-cmap = matplotlib.colors.ListedColormap(np.random.rand(256, 3))
+colmat = np.zeros((2, 3)).astype(float)
+colmat[0, :] = [1, 1, 0]
+colmat[1, :] = [1, 0, 1]
+cmap = matplotlib.colors.ListedColormap(colmat)
+
 font = {
     "family": "sans-serif",
     "color": "black",
@@ -558,11 +562,6 @@ class Spore:
 
         result_folder_exp = self.path_to_analysis(exp_folder, result_folder)
 
-        colmat = np.zeros((2, 3)).astype(float)
-        colmat[0, :] = [1, 1, 0]
-        colmat[1, :] = [1, 0, 1]
-        cmap = matplotlib.colors.ListedColormap(colmat)
-
         ecc_table = self.load_experiment(result_folder_exp)
         im_files = ecc_table.filename.unique()
 
@@ -604,7 +603,7 @@ class Spore:
             fig.add_axes(ax)
 
             plt.imshow(image, cmap="gray")
-            plt.imshow(empty_im, cmap=cmap, alpha=0.9)  # ,vmin=0,vmax = 14)
+            plt.imshow(empty_im, cmap=cmap, alpha=0.9, vmin=0, vmax=3)
             if self.show_output:
                 plt.show()
             fig.savefig(
