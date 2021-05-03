@@ -1,3 +1,4 @@
+from pathlib import Path
 import os, glob
 import numpy as np
 import pandas as pd
@@ -71,12 +72,15 @@ class Spore:
 
     def path_to_analysis(self, data_path, result_folder):
         """
-        Returns the path to the result folder of an analysis
+        Returns the path to the result folder of an analysis. If data_path
+        points to a file, the folder is results_folder + parent folder of file. If
+        data_path is a folder, the folder is results_folder + folder. If data_path
+        is just a name, the folder is results_folder + name.
 
         Parameters
         ----------
-        data_path : str
-            path to data
+        data_path : str or Path object
+            path to file, folder or name
         result_folder : str
             main folder of results
 
@@ -86,75 +90,76 @@ class Spore:
             folder of results for a given dataset
         """
 
-        if os.path.isfile(data_path):
-            result_folder_exp = (
-                result_folder + "/" + os.path.basename(os.path.dirname(data_path))
-            )
+        data_path = Path(data_path)
+        result_folder = Path(result_folder)
+
+        if data_path.is_file():
+            result_folder_exp = result_folder.joinpath(data_path.parent.stem)
         else:
-            result_folder_exp = (
-                os.path.normpath(result_folder)
-                + "/"
-                + os.path.basename(os.path.normpath(data_path))
-            )
+            result_folder_exp = result_folder.joinpath(data_path.stem)        
 
         if not os.path.isdir(result_folder_exp):
             os.makedirs(result_folder_exp, exist_ok=True)
 
         return result_folder_exp
 
-    def analyse_single_image(self, image_path, result_folder):
+    def analyse_single_image(self, image_path, result_folder, save_name=None):
         """
         Segment a single image. Saves segmentation images and
         segmentation results as pkl and csv
 
         Parameters
         ----------
-        image_path : str
+        image_path : str or ndarray
             path to image
         result_folder : str
             main folder of results
+        save_name: str
+            name to use for saving the analysis. If none and image_path
+            is a str, the image name is used, otherwise "image" is used
 
         Returns
         -------
 
         """
 
+        # image loading
+        if isinstance(image_path, np.ndarray):
+            if save_name is None:
+                save_name = 'image'
+        else:
+            image = skimage.io.imread(image_path)[:, :, 0]
+            if save_name is None:
+                image_path = Path(image_path)
+                save_name = image_path.stem
+
         regions, image, image_seg = self.find_spores(image_path)
         fig = self.plot_segmentation(image, image_seg)
 
-        result_folder_exp = self.path_to_analysis(image_path, result_folder)
+        result_folder_exp = self.path_to_analysis(save_name, result_folder)
 
-        regions.to_pickle(
-            result_folder_exp
-            + "/"
-            + os.path.basename(image_path).split(".")[0]
-            + ".pkl"
-        )
+        regions.to_pickle(result_folder_exp.joinpath(save_name+'.pkl'))
+        
         regions[["area", "convex_area", "ecc", "centroid_x", "centroid_y"]].to_csv(
-            result_folder_exp
-            + "/"
-            + os.path.basename(image_path).split(".")[0]
-            + ".csv",
+            result_folder_exp.joinpath(save_name+'.csv'),
             index=False,
             float_format="%.5f",
         )
         fig.savefig(
-            result_folder_exp
-            + "/"
-            + os.path.basename(image_path).split(".")[0]
-            + "_seg.png",
-            dpi=image_seg.shape[0],
+            result_folder_exp.joinpath(save_name+'_seg.png'), dpi=image_seg.shape[0],
         )
         plt.close(fig)
 
-    def find_spores(self, image_path):
+    def find_spores(self, image_path, image_name=None):
         """
         Segmentation of an image.
 
         Parameters
         ----------
-        image_path : str
-            path to image
+        image_path : str or ndarray
+            path to image or image
+        image_name: str
+            if image_path is an ndarray, name of image for saving
 
         Returns
         -------
@@ -185,7 +190,13 @@ class Spore:
                 "centroid_y": [x.centroid[1] for x in regions],
             }
         )
-        regions_prop["filename"] = image_path
+
+        if isinstance(image_path, np.ndarray):
+            if image_name is None:
+                image_name = 'image'
+            regions_prop["filename"] = image_name
+        else:
+            regions_prop["filename"] = str(Path(image_path))
 
         return regions_prop, raw_im, image_mask
 
@@ -195,8 +206,8 @@ class Spore:
 
         Parameters
         ----------
-        image_path : str
-            path to image
+        image_path : str or ndarray
+            path to image or image
 
         Returns
         -------
@@ -207,7 +218,10 @@ class Spore:
         """
 
         # image loading
-        image = skimage.io.imread(image_path)[:, :, 0]
+        if isinstance(image_path, np.ndarray):
+            image = image_path
+        else:
+            image = skimage.io.imread(image_path)[:, :, 0]            
         
         # median filtering
         raw_image = skimage.filters.median(
@@ -250,7 +264,7 @@ class Spore:
 
         return image, newmask
 
-    def plot_segmentation(self, image, image_seg):
+    def plot_segmentation(self, image, image_seg, fig_scaling=1):
         """
         Plot and save the superposition of an image and its binary
         segmentation mask
@@ -261,6 +275,8 @@ class Spore:
             intensity image
         image_seg : numpy array
             binary mask array
+        fig_scaling: int
+            scaling factor for displayed image
 
 
         Returns
@@ -268,7 +284,7 @@ class Spore:
         fig: matplotlib figure
 
         """
-
+        
         image_seg = image_seg.astype(float)
         image_seg[image_seg == 0] = np.nan
 
@@ -276,9 +292,10 @@ class Spore:
         height = float(sizes[0])
         width = float(sizes[1])
 
+        factor = 1
         fig = plt.figure()
-        fig.set_size_inches(width / height, 1, forward=False)
-        ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
+        fig.set_size_inches(width / height, fig_scaling, forward=False)
+        ax = plt.Axes(fig, [0.0, 0.0, 1.0*fig_scaling, 1.0*fig_scaling])
         ax.set_axis_off()
         fig.add_axes(ax)
 
@@ -305,7 +322,7 @@ class Spore:
 
         """
 
-        filenames = glob.glob(os.path.normpath(exp_folder) + "/*.jpg")
+        filenames = Path(exp_folder).glob("*.jpg")
         for f in filenames:
             self.analyse_single_image(f, result_folder)
 
@@ -326,7 +343,7 @@ class Spore:
 
         """
 
-        filenames = glob.glob(result_folder_exp + "/*.pkl")
+        filenames = Path(result_folder_exp).glob("*.pkl")
 
         all_regions = []
         for f in filenames:
@@ -357,7 +374,7 @@ class Spore:
 
         Parameters
         ----------
-        result_folder_exp : str
+        result_folder_exp : str or Path object
             path to folder with results
 
 
@@ -365,6 +382,8 @@ class Spore:
         -------
 
         """
+
+        result_folder_exp = Path(result_folder_exp)
 
         # recover all the spore properties for all images
         ecc_table_or = self.load_experiment(result_folder_exp)
@@ -431,16 +450,11 @@ class Spore:
         for indk, k in enumerate(list(grouped.groups.keys())):
             cur_group = grouped.get_group(k)
             cur_group.to_pickle(
-                result_folder_exp
-                + "/"
-                + os.path.basename(cur_group.iloc[0].filename).split(".")[0]
-                + ".pkl"
-            )
+                result_folder_exp.joinpath(Path(cur_group.iloc[0].filename).stem + ".pkl"
+            ))
             cur_group[["centroid_x", "centroid_y", "area", "convex_area", "ecc", "roundcat"]].to_csv(
-                result_folder_exp
-                + "/"
-                + os.path.basename(cur_group.iloc[0].filename).split(".")[0]
-                + ".csv",
+                result_folder_exp.joinpath(
+                Path(cur_group.iloc[0].filename).stem + ".csv"),
                 mode="w",
                 index=False,
                 float_format="%.5f",
@@ -456,10 +470,7 @@ class Spore:
             lambda x: os.path.basename(x)
         )
         ecc_table_or[["filename", "centroid_x", "centroid_y", "area", "ecc", "roundcat"]].to_csv(
-            result_folder_exp
-            + "/"
-            + os.path.basename(os.path.normpath(result_folder_exp))
-            + "_summary.csv",
+            result_folder_exp.joinpath(Path(result_folder_exp.stem) + "_summary.csv"),
             index=False,
             header=["filename", "centroid_x", "centroid_y", "area", "eccentricity", "round"],
             float_format="%.5f",
@@ -525,29 +536,25 @@ class Spore:
             ax.legend()
         if self.show_title:
             ax.set_title(
-                os.path.basename(os.path.normpath(result_folder_exp))
+                result_folder_exp.stem
                 + ", Round frac: "
                 + str(np.around(frac_round, decimals=2))
             )
         if self.show_output:
             plt.show()
         fig.savefig(
-            result_folder_exp
-            + "/"
-            + os.path.basename(os.path.normpath(result_folder_exp))
-            + "_summary.png"
+            result_folder_exp.joinpath(result_folder_exp.stem + "_summary.png")
         )
         plt.close(fig)
         pd.DataFrame(
             {
-                "name": [os.path.basename(os.path.normpath(result_folder_exp))],
+                "name": [result_folder_exp.stem],
                 "fraction": [np.around(frac_round, decimals=2)],
             }
         ).to_csv(
-            result_folder_exp
-            + "/"
-            + os.path.basename(os.path.normpath(result_folder_exp))
-            + ".csv",
+            result_folder_exp.joinpath(
+            result_folder_exp.stem
+            + ".csv"),
             index=False,
             header=False,
         )
@@ -617,10 +624,7 @@ class Spore:
             if self.show_output:
                 plt.show()
             fig.savefig(
-                result_folder_exp
-                + "/"
-                + os.path.basename(f).split(".")[0]
-                + "_classes.png",
+                result_folder_exp.joinpath(f.stem + "_classes.png"),
                 dpi=height,
             )
             plt.close(fig)
