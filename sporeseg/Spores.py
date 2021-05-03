@@ -70,7 +70,8 @@ class Spore:
         self.convexity = convexity
 
     def path_to_analysis(self, data_path, result_folder):
-        """Returns the path to the result folder of an analysis
+        """
+        Returns the path to the result folder of an analysis
 
         Parameters
         ----------
@@ -102,7 +103,8 @@ class Spore:
         return result_folder_exp
 
     def analyse_single_image(self, image_path, result_folder):
-        """Segment a single image. Saves segmentation images and
+        """
+        Segment a single image. Saves segmentation images and
         segmentation results as pkl and csv
 
         Parameters
@@ -146,7 +148,8 @@ class Spore:
         plt.close(fig)
 
     def find_spores(self, image_path):
-        """Segmentation of an image.
+        """
+        Segmentation of an image.
 
         Parameters
         ----------
@@ -187,7 +190,8 @@ class Spore:
         return regions_prop, raw_im, image_mask
 
     def segmentation(self, image_path, gradient_threshold = 10):
-        """Alternative solution for creation of binary mask of spores.
+        """
+        Alternative solution for creation of binary mask of spores.
 
         Parameters
         ----------
@@ -247,7 +251,8 @@ class Spore:
         return image, newmask
 
     def plot_segmentation(self, image, image_seg):
-        """Plot and save the superposition of an image and its binary
+        """
+        Plot and save the superposition of an image and its binary
         segmentation mask
 
         Parameters
@@ -284,7 +289,8 @@ class Spore:
         return fig
 
     def analyse_spore_folder(self, exp_folder, result_folder):
-        """Run segmentation on all images of a folder
+        """
+        Run segmentation on all images of a folder
 
         Parameters
         ----------
@@ -304,7 +310,8 @@ class Spore:
             self.analyse_single_image(f, result_folder)
 
     def load_experiment(self, result_folder_exp):
-        """Load all segmentation data (pkl files) of a folder.
+        """
+        Load all segmentation data (pkl files) of a folder.
 
         Parameters
         ----------
@@ -341,10 +348,11 @@ class Spore:
         return (a / (s * (2 * np.pi) ** 0.5)) * np.exp(-0.5 * ((x - x0) / s) ** 2)
 
     def split_categories(self, result_folder_exp):
-        """Given a segmentation dataset split the results
+        """
+        Given a segmentation dataset split the results
         into two categories based on eccentricity. Results are saved 
         in the form of a csv file. The threshold between categories can
-        be calcualted using a gaussian mixture or it can be manually set
+        be calculated using a gaussian mixture or it can be manually set
         if self.threshold has a value.
 
         Parameters
@@ -545,7 +553,8 @@ class Spore:
         )
 
     def plot_image_categories(self, exp_folder, result_folder):
-        """Plot a superposition of images and their segmentation
+        """
+        Plot a superposition of images and their segmentation
         with the two categories colored differently.
 
         Parameters
