@@ -25,6 +25,28 @@ font = {
 
 
 class Spore:
+"""Class defining a spore segmentation and analysis experiment.
+
+    Parameters
+    ----------
+    show_output : bool
+        show segmentation images during analysis
+    show_title : bool
+        add a title to histogram
+    show_legend : bool
+        add a legend to histogram
+    min_area : int
+        minimal area of spores considered in analysis
+    max_area : int
+        maximal area of spores considered in analysis
+    bin_width : float
+        bin width of eccentricity histogram
+    threshold : float
+        fixed threshold to use for splitting
+    convexity : float (0-1)
+        threshold for convexity. Convex object have a value of 1
+    """
+
     def __init__(
         self,
         show_output=False,
@@ -36,28 +58,6 @@ class Spore:
         threshold=None,
         convexity=0.9,
     ):
-
-        """Standard __init__ method.
-
-        Parameters
-        ----------
-        show_output : bool
-            show segmentation images during analysis
-        show_title : bool
-            add a title to histogram
-        show_legend : bool
-            add a legend to histogram
-        min_area : int
-            minimal area of spores considered in analysis
-        max_area : int
-            maximal area of spores considered in analysis
-        bin_width : float
-            bin width of eccentricity histogram
-        threshold : float
-            fixed threshold to use for splitting
-        convexity : float (0-1)
-            threshold for convexity. Convex object have a value of 1
-        """
 
         self.show_output = show_output
         self.show_title = show_title
