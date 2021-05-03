@@ -123,30 +123,36 @@ class Spore:
 
         """
 
-        # image loading
+        # if ndarray is passed use default "image" name for outputs unless save_name is specified
         if isinstance(image_path, np.ndarray):
             if save_name is None:
                 save_name = 'image'
+                save_file = 'image'
+            else:
+                save_file = save_name
         else:
+            image_path = Path(image_path)
             image = skimage.io.imread(image_path)[:, :, 0]
             if save_name is None:
-                image_path = Path(image_path)
-                save_name = image_path.stem
+                save_name = image_path
+                save_file = image_path.stem
+            else:
+                save_file = save_name
 
         regions, image, image_seg = self.find_spores(image_path)
         fig = self.plot_segmentation(image, image_seg)
 
         result_folder_exp = self.path_to_analysis(save_name, result_folder)
 
-        regions.to_pickle(result_folder_exp.joinpath(save_name+'.pkl'))
+        regions.to_pickle(result_folder_exp.joinpath(save_file+'.pkl'))
         
         regions[["area", "convex_area", "ecc", "centroid_x", "centroid_y"]].to_csv(
-            result_folder_exp.joinpath(save_name+'.csv'),
+            result_folder_exp.joinpath(save_file+'.csv'),
             index=False,
             float_format="%.5f",
         )
         fig.savefig(
-            result_folder_exp.joinpath(save_name+'_seg.png'), dpi=image_seg.shape[0],
+            result_folder_exp.joinpath(save_file+'_seg.png'), dpi=image_seg.shape[0],
         )
         plt.close(fig)
 
@@ -176,7 +182,7 @@ class Spore:
 
         # measure region properties and keep area, eccentricity and coords
         regions = skimage.measure.regionprops(
-            skimage.morphology.label(image_mask), coordinates="rc"
+            skimage.morphology.label(image_mask)
         )
 
         # collect relevant information
@@ -332,7 +338,7 @@ class Spore:
 
         Parameters
         ----------
-        result_folder_exp : str
+        result_folder_exp : str or path object
             path to folder with results
 
 
@@ -470,7 +476,7 @@ class Spore:
             lambda x: os.path.basename(x)
         )
         ecc_table_or[["filename", "centroid_x", "centroid_y", "area", "ecc", "roundcat"]].to_csv(
-            result_folder_exp.joinpath(Path(result_folder_exp.stem) + "_summary.csv"),
+            result_folder_exp.joinpath(result_folder_exp.stem + "_summary.csv"),
             index=False,
             header=["filename", "centroid_x", "centroid_y", "area", "eccentricity", "round"],
             float_format="%.5f",
@@ -566,9 +572,9 @@ class Spore:
 
         Parameters
         ----------
-        exp_folder : str
+        exp_folder : str or path object
             path to folder with images
-        result_folder : str
+        result_folder : str or path object
             folder where to save results
 
 
