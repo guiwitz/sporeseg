@@ -23,9 +23,9 @@ font = {
     "size": 16,
 }
 
-
 class Spore:
-"""Class defining a spore segmentation and analysis experiment.
+    """
+    Class defining a spore segmentation and analysis experiment.
 
     Parameters
     ----------
@@ -45,6 +45,7 @@ class Spore:
         fixed threshold to use for splitting
     convexity : float (0-1)
         threshold for convexity. Convex object have a value of 1
+
     """
 
     def __init__(
