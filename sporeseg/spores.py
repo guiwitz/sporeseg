@@ -103,7 +103,7 @@ class Spore:
 
         return result_folder_exp
 
-    def analyse_single_image(self, image_path, result_folder, save_name=None):
+    def analyse_single_image(self, image_path, result_folder, save_name=None, fig_scaling=1):
         """
         Segment a single image. Saves segmentation images and
         segmentation results as pkl and csv
@@ -117,6 +117,8 @@ class Spore:
         save_name: str
             name to use for saving the analysis. If none and image_path
             is a str, the image name is used, otherwise "image" is used
+        fig_scaling: int
+            scaling factor for displayed image
 
         Returns
         -------
@@ -140,7 +142,7 @@ class Spore:
                 save_file = save_name
 
         regions, image, image_seg = self.find_spores(image_path)
-        fig = self.plot_segmentation(image, image_seg)
+        fig = self.plot_segmentation(image, image_seg, fig_scaling)
 
         result_folder_exp = self.path_to_analysis(save_name, result_folder)
 
@@ -151,8 +153,13 @@ class Spore:
             index=False,
             float_format="%.5f",
         )
+
+        # reset size before saving to have correct pixel number
+        height = image_seg.shape[0]
+        width = image_seg.shape[1]
+        fig.set_size_inches(width / height, 1, forward=False)
         fig.savefig(
-            result_folder_exp.joinpath(save_file+'_seg.png'), dpi=image_seg.shape[0],
+            result_folder_exp.joinpath(save_file+'_seg.png'), dpi=height,
         )
         plt.close(fig)
 
@@ -300,13 +307,13 @@ class Spore:
 
         factor = 1
         fig = plt.figure()
-        fig.set_size_inches(width / height, fig_scaling, forward=False)
-        ax = plt.Axes(fig, [0.0, 0.0, 1.0*fig_scaling, 1.0*fig_scaling])
+        fig.set_size_inches(fig_scaling*width / height, fig_scaling, forward=False)
+        ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
         ax.set_axis_off()
         fig.add_axes(ax)
 
         plt.imshow(image, cmap="gray")
-        plt.imshow(image_seg, cmap="Reds", alpha=0.7, vmin=0, vmax=1.5)
+        plt.imshow(image_seg, cmap="Reds", alpha=0.7, vmin=0, vmax=1.5, interpolation='none')
         if self.show_output:
             plt.show()
         return fig
@@ -571,7 +578,7 @@ class Spore:
             header=False,
         )
 
-    def plot_image_categories(self, exp_folder, result_folder):
+    def plot_image_categories(self, exp_folder, result_folder, fig_scaling=1):
         """
         Plot a superposition of images and their segmentation
         with the two categories colored differently.
@@ -582,6 +589,8 @@ class Spore:
             path to folder with images
         result_folder : str or path object
             folder where to save results
+        fig_scaling: int
+            scaling factor for displayed image
 
 
         Returns
@@ -595,7 +604,8 @@ class Spore:
         im_files = ecc_table.filename.unique()
 
         for f in im_files:
-            image = skimage.io.imread(f)[:, :, 0]
+            fp = Path(f)
+            image = skimage.io.imread(fp)[:, :, 0]
             cur_spores = ecc_table[ecc_table.filename == f]
             empty_im = np.zeros(image.shape)
             for x in cur_spores.index:
@@ -626,17 +636,20 @@ class Spore:
             width = float(sizes[1])
 
             fig = plt.figure()
-            fig.set_size_inches(width / height, 1, forward=False)
+            fig.set_size_inches(fig_scaling * width / height, fig_scaling, forward=False)
             ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
             ax.set_axis_off()
             fig.add_axes(ax)
 
             plt.imshow(image, cmap="gray")
-            plt.imshow(empty_im, cmap=cmap, alpha=0.9, vmin=0, vmax=3)
+            plt.imshow(empty_im, cmap=cmap, alpha=0.9, vmin=0, vmax=3, interpolation='none')
             if self.show_output:
                 plt.show()
+            
+            # reset size to have correct number of pixels
+            fig.set_size_inches(width / height, 1, forward=False)
             fig.savefig(
-                result_folder_exp.joinpath(f.stem + "_classes.png"),
-                dpi=height,
+                result_folder_exp.joinpath(fp.stem + "_classes.png"),
+                dpi= height,
             )
             plt.close(fig)
