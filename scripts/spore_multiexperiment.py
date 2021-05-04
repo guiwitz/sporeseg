@@ -1,6 +1,6 @@
 import os
 import argparse
-from spores.sporeClass import Spore
+from sporeseg.spores import Spore
 
 parser = argparse.ArgumentParser()
 parser.add_argument('main_folder', type=str, help='General folder containing multiple experiments')
