@@ -370,7 +370,7 @@ class Spore:
     def normal_fit(self, x, a, x0, s):
         return (a / (s * (2 * np.pi) ** 0.5)) * np.exp(-0.5 * ((x - x0) / s) ** 2)
 
-    def split_categories(self, result_folder_exp):
+    def split_categories(self, result_folder_exp, init_means=None):
         """
         Given a segmentation dataset split the results
         into two categories based on eccentricity. Results are saved 
@@ -382,6 +382,9 @@ class Spore:
         ----------
         result_folder_exp : str or Path object
             path to folder with results
+        init_means : list
+            [x0, x1] where x0 and x1 are the means used as starting point
+            for classification fit
 
 
         Returns
@@ -390,6 +393,9 @@ class Spore:
         """
 
         result_folder_exp = Path(result_folder_exp)
+
+        if init_means is None:
+            init_means = [0.5, 0.95]
 
         # recover all the spore properties for all images
         ecc_table_or = self.load_experiment(result_folder_exp)
@@ -410,7 +416,7 @@ class Spore:
 
             # create EM object. Initialization is important to ensure the two classes don't overlap
             GM = mixture.GaussianMixture(
-                n_components=2, means_init=np.reshape([0.5, 0.95], (-1, 1))
+                n_components=2, means_init=np.reshape(init_means, (-1, 1))
             )
 
             # classifiy the data
