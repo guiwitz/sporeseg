@@ -46,6 +46,8 @@ class Spore:
         fixed threshold to use for splitting
     convexity : float (0-1)
         threshold for convexity. Convex object have a value of 1
+    fig_scaling: int
+        scaling factor to make figure displayed in a notebook larger
 
     """
 
@@ -59,6 +61,7 @@ class Spore:
         show_legend=True,
         threshold=None,
         convexity=0.9,
+        fig_scaling=1
     ):
 
         self.show_output = show_output
@@ -69,6 +72,7 @@ class Spore:
         self.bin_width = bin_width
         self.threshold = threshold
         self.convexity = convexity
+        self.fig_scaling = fig_scaling
 
     def path_to_analysis(self, data_path, result_folder):
         """
@@ -103,7 +107,7 @@ class Spore:
 
         return result_folder_exp
 
-    def analyse_single_image(self, image_path, result_folder, save_name=None, fig_scaling=1):
+    def analyse_single_image(self, image_path, result_folder, save_name=None):
         """
         Segment a single image. Saves segmentation images and
         segmentation results as pkl and csv
@@ -117,8 +121,6 @@ class Spore:
         save_name: str
             name to use for saving the analysis. If none and image_path
             is a str, the image name is used, otherwise "image" is used
-        fig_scaling: int
-            scaling factor for displayed image
 
         Returns
         -------
@@ -142,7 +144,7 @@ class Spore:
                 save_file = save_name
 
         regions, image, image_seg = self.find_spores(image_path)
-        fig = self.plot_segmentation(image, image_seg, fig_scaling)
+        fig = self.plot_segmentation(image, image_seg)
 
         result_folder_exp = self.path_to_analysis(save_name, result_folder)
 
@@ -277,7 +279,7 @@ class Spore:
 
         return image, newmask
 
-    def plot_segmentation(self, image, image_seg, fig_scaling=1):
+    def plot_segmentation(self, image, image_seg):
         """
         Plot and save the superposition of an image and its binary
         segmentation mask
@@ -288,9 +290,6 @@ class Spore:
             intensity image
         image_seg : numpy array
             binary mask array
-        fig_scaling: int
-            scaling factor for displayed image
-
 
         Returns
         -------
@@ -307,7 +306,7 @@ class Spore:
 
         factor = 1
         fig = plt.figure()
-        fig.set_size_inches(fig_scaling*width / height, fig_scaling, forward=False)
+        fig.set_size_inches(self.fig_scaling*width / height, self.fig_scaling, forward=False)
         ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
         ax.set_axis_off()
         fig.add_axes(ax)
@@ -578,7 +577,7 @@ class Spore:
             header=False,
         )
 
-    def plot_image_categories(self, exp_folder, result_folder, fig_scaling=1):
+    def plot_image_categories(self, exp_folder, result_folder):
         """
         Plot a superposition of images and their segmentation
         with the two categories colored differently.
@@ -589,8 +588,6 @@ class Spore:
             path to folder with images
         result_folder : str or path object
             folder where to save results
-        fig_scaling: int
-            scaling factor for displayed image
 
 
         Returns
@@ -636,7 +633,7 @@ class Spore:
             width = float(sizes[1])
 
             fig = plt.figure()
-            fig.set_size_inches(fig_scaling * width / height, fig_scaling, forward=False)
+            fig.set_size_inches(self.fig_scaling * width / height, self.fig_scaling, forward=False)
             ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
             ax.set_axis_off()
             fig.add_axes(ax)
